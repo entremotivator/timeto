@@ -1,13 +1,12 @@
 import streamlit as st
 import requests
-import json
 from datetime import datetime, timedelta, timezone
 
 # -----------------------------
 # API and Calendar Settings
 # -----------------------------
 API_BASE_URL = "https://rest.tsheets.com/api/v1"
-# Fixed Schedule Calendar ID as per the requirement:
+# Fixed Schedule Calendar ID (as per requirement)
 SCHEDULE_CALENDAR_ID = 563646  
 # Reference: Rest.tsheets.com/api.v1/schedule_calenders id563646
 
@@ -31,10 +30,9 @@ HEADERS = {
 def fetch_schedule_events(start, end):
     """
     Fetch schedule events between two ISO 8601 timestamps for the fixed Schedule Calendar ID.
-    Timestamps are expected to be in a complete ISO 8601 format (with timezone).
+    The timestamps must be in a valid ISO-8601 format (without microseconds).
     """
     url = f"{API_BASE_URL}/schedule_events"
-    # Use the fixed schedule calendar ID and ensure timestamps are ISO 8601 with timezone info.
     params = {
         "start": start,
         "end": end,
@@ -115,22 +113,17 @@ elif page == "View Schedules":
     st.title("View Schedule Events")
     st.write(f"Viewing schedule events for Schedule Calendar ID: `{SCHEDULE_CALENDAR_ID}`")
     
-    # Input for date range; note that we convert these dates to UTC ISO 8601 format.
+    # Get start and end dates from the user.
     start_date = st.date_input("Start Date", datetime.today() - timedelta(days=7))
     end_date = st.date_input("End Date", datetime.today() + timedelta(days=30))
     
     if st.button("Fetch Schedules"):
-        # Create timezone-aware datetime objects in UTC
+        # Create timezone-aware datetime objects in UTC and remove microseconds.
         start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
         end_dt = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-        
-        # Convert to ISO 8601 strings with timezone info
-        start_iso = start_dt.isoformat()  # e.g., "2025-02-21T00:00:00+00:00"
-        end_iso = end_dt.isoformat()      # e.g., "2025-03-23T23:59:59.999999+00:00"
-        
-        # Debug: Uncomment the lines below to inspect the formatted timestamps
-        # st.write("Start ISO:", start_iso)
-        # st.write("End ISO:", end_iso)
+        # Remove microseconds to ensure a valid ISO-8601 format.
+        start_iso = start_dt.replace(microsecond=0).isoformat()  # e.g., "2025-02-21T00:00:00+00:00"
+        end_iso = end_dt.replace(microsecond=0).isoformat()      # e.g., "2025-03-30T23:59:59+00:00"
         
         data = fetch_schedule_events(start_iso, end_iso)
         if data:
@@ -155,8 +148,8 @@ elif page == "Create Schedule":
     st.write(f"Creating a new schedule event for Schedule Calendar ID: `{SCHEDULE_CALENDAR_ID}`")
     st.info(f"Using fixed Schedule Calendar ID: `{SCHEDULE_CALENDAR_ID}`")
     
-    start = st.text_input("Start Time (ISO 8601)", value=datetime.now(timezone.utc).isoformat())
-    end = st.text_input("End Time (ISO 8601)", value=(datetime.now(timezone.utc) + timedelta(hours=2)).isoformat())
+    start = st.text_input("Start Time (ISO 8601)", value=datetime.now(timezone.utc).replace(microsecond=0).isoformat())
+    end = st.text_input("End Time (ISO 8601)", value=(datetime.now(timezone.utc) + timedelta(hours=2)).replace(microsecond=0).isoformat())
     title = st.text_input("Title")
     notes = st.text_area("Notes")
     assigned_user_ids = st.text_input("Assigned User IDs (comma-separated)")
@@ -179,7 +172,6 @@ elif page == "Create Schedule":
             "jobcode_id": int(jobcode_id) if jobcode_id else 0,
             "color": color
         }
-        # Remove keys with None values
         event_data = {k: v for k, v in event_data.items() if v is not None}
         response = create_schedule_event(event_data)
         if response.status_code in [200, 201]:
@@ -230,7 +222,6 @@ elif page == "Update Schedule":
         if new_color:
             update_data["color"] = new_color
         
-        # Remove keys with None values
         update_data = {k: v for k, v in update_data.items() if v is not None}
         response = update_schedule_event(update_data)
         if response.status_code in [200, 201]:
