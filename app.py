@@ -26,14 +26,16 @@ HEADERS = {
 # -----------------------------
 # API Helper Functions
 # -----------------------------
-def fetch_schedule_events(start, end):
+def fetch_schedule_events(start, end, schedule_calendar_ids):
     """
-    Fetch schedule events between two ISO 8601 date/times.
+    Fetch schedule events between two ISO 8601 date/times for specified schedule calendar IDs.
+    The schedule_calendar_ids parameter is required by the API.
     """
     url = f"{API_BASE_URL}/schedule_events"
     params = {
         "start": start,
         "end": end,
+        "schedule_calendar_ids": schedule_calendar_ids,  # Required parameter to filter calendars
         "supplemental_data": "yes"
     }
     response = requests.get(url, headers=HEADERS, params=params)
@@ -63,7 +65,7 @@ def update_schedule_event(event_data):
 
 def delete_schedule_event(event_id, schedule_calendar_id):
     """
-    “Delete” a schedule event by marking it inactive.
+    "Delete" (deactivate) a schedule event by setting its 'active' flag to False.
     """
     data = {
         "id": event_id,
@@ -89,7 +91,7 @@ if page == "Home":
     st.title("TSheets Schedule Manager")
     st.write("Welcome to the TSheets Schedule Manager app. Use the sidebar to navigate:")
     st.markdown("""
-    - **View Schedules:** Fetch and display schedule events within a date range.
+    - **View Schedules:** Fetch and display schedule events within a date range for specific calendar IDs.
     - **Create Schedule:** Add a new schedule event.
     - **Update Schedule:** Modify an existing schedule event.
     - **Delete Schedule:** Deactivate (delete) an event.
@@ -100,27 +102,39 @@ if page == "Home":
 # -----------------------------
 elif page == "View Schedules":
     st.title("View Schedule Events")
-    st.write("Select a date range to view schedule events.")
+    st.write("Select a date range and provide the Schedule Calendar IDs to view schedule events.")
+    
+    # Input for required schedule calendar IDs (comma-separated)
+    schedule_calendar_ids_input = st.text_input("Schedule Calendar IDs (comma-separated)")
+    
+    # Date range inputs
     start_date = st.date_input("Start Date", datetime.today() - timedelta(days=7))
     end_date = st.date_input("End Date", datetime.today() + timedelta(days=30))
     
     if st.button("Fetch Schedules"):
-        start_iso = datetime.combine(start_date, datetime.min.time()).isoformat()
-        end_iso = datetime.combine(end_date, datetime.max.time()).isoformat()
-        data = fetch_schedule_events(start_iso, end_iso)
-        if data:
-            schedules = data.get("results", {}).get("schedule_events", {})
-            if schedules:
-                st.success(f"Fetched {len(schedules)} schedule event(s).")
-                for key, event in schedules.items():
-                    st.markdown(f"### Event ID: {event.get('id', 'N/A')}")
-                    st.write(f"**Title:** {event.get('title', 'N/A')}")
-                    st.write(f"**Start:** {event.get('start', 'N/A')}")
-                    st.write(f"**End:** {event.get('end', 'N/A')}")
-                    st.write(f"**Notes:** {event.get('notes', '')}")
-                    st.markdown("---")
-            else:
-                st.warning("No schedule events found for the selected range.")
+        # Validate that calendar IDs have been provided
+        if not schedule_calendar_ids_input:
+            st.error("Please provide at least one Schedule Calendar ID.")
+        else:
+            # Format dates in ISO 8601 format
+            start_iso = datetime.combine(start_date, datetime.min.time()).isoformat()
+            end_iso = datetime.combine(end_date, datetime.max.time()).isoformat()
+            
+            # Call the API with the provided calendar IDs
+            data = fetch_schedule_events(start_iso, end_iso, schedule_calendar_ids_input)
+            if data:
+                schedules = data.get("results", {}).get("schedule_events", {})
+                if schedules:
+                    st.success(f"Fetched {len(schedules)} schedule event(s).")
+                    for key, event in schedules.items():
+                        st.markdown(f"### Event ID: {event.get('id', 'N/A')}")
+                        st.write(f"**Title:** {event.get('title', 'N/A')}")
+                        st.write(f"**Start:** {event.get('start', 'N/A')}")
+                        st.write(f"**End:** {event.get('end', 'N/A')}")
+                        st.write(f"**Notes:** {event.get('notes', '')}")
+                        st.markdown("---")
+                else:
+                    st.warning("No schedule events found for the selected range and calendar IDs.")
 
 # -----------------------------
 # Create Schedule Page
@@ -128,6 +142,7 @@ elif page == "View Schedules":
 elif page == "Create Schedule":
     st.title("Create Schedule Event")
     st.write("Fill out the details to create a new schedule event.")
+    
     schedule_calendar_id = st.text_input("Schedule Calendar ID")
     start = st.text_input("Start Time (ISO 8601)", value=datetime.now().isoformat())
     end = st.text_input("End Time (ISO 8601)", value=(datetime.now() + timedelta(hours=2)).isoformat())
@@ -154,7 +169,7 @@ elif page == "Create Schedule":
             "jobcode_id": int(jobcode_id) if jobcode_id else 0,
             "color": color
         }
-        # Remove None values from the payload
+        # Remove any keys with None values
         event_data = {k: v for k, v in event_data.items() if v is not None}
         response = create_schedule_event(event_data)
         if response.status_code in [200, 201]:
@@ -169,6 +184,7 @@ elif page == "Create Schedule":
 elif page == "Update Schedule":
     st.title("Update Schedule Event")
     st.write("Fill out the details to update an existing schedule event.")
+    
     event_id = st.text_input("Event ID to update")
     schedule_calendar_id = st.text_input("Schedule Calendar ID (required)")
     new_title = st.text_input("New Title")
@@ -220,8 +236,10 @@ elif page == "Update Schedule":
 elif page == "Delete Schedule":
     st.title("Delete (Deactivate) Schedule Event")
     st.write("Enter the Event ID and Schedule Calendar ID to deactivate (delete) an event.")
+    
     event_id = st.text_input("Event ID to deactivate")
     schedule_calendar_id = st.text_input("Schedule Calendar ID (required)")
+    
     if st.button("Deactivate Event"):
         if not event_id or not schedule_calendar_id:
             st.error("Please provide both Event ID and Schedule Calendar ID.")
